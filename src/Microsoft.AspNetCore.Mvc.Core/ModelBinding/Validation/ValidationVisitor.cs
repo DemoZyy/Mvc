@@ -185,52 +185,26 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Validation
             {
                 if (_metadata.IsEnumerableType)
                 {
-                    return VisitEnumerableType();
+                    return VisitComplexType(DefaultCollectionValidationStrategy.Instance);
                 }
-                else if (_metadata.IsComplexType)
+
+                if (_metadata.IsComplexType)
                 {
-                    return VisitComplexType();
+                    return VisitComplexType(DefaultComplexObjectValidationStrategy.Instance);
                 }
-                else
-                {
-                    return VisitSimpleType();
-                }
+
+                return VisitSimpleType();
             }
         }
 
-        private bool VisitEnumerableType()
+        // Covers everything VisitSimpleType does not i.e. both enumerations and complex types.
+        private bool VisitComplexType(IValidationStrategy defaultStrategy)
         {
             var isValid = true;
 
             if (_model != null && _metadata.ValidateChildren)
             {
-                var strategy = _strategy ?? DefaultCollectionValidationStrategy.Instance;
-                isValid = VisitChildren(strategy);
-            }
-            else if (_model != null)
-            {
-                // Suppress validation for the entries matching this prefix. This will temporarily set
-                // the current node to 'skipped' but we're going to visit it right away, so subsequent
-                // code will set it to 'valid' or 'invalid'
-                SuppressValidation(_key);
-            }
-
-            // Double-checking HasReachedMaxErrors just in case this model has no elements.
-            if (isValid && !_modelState.HasReachedMaxErrors)
-            {
-                isValid &= ValidateNode();
-            }
-
-            return isValid;
-        }
-
-        private bool VisitComplexType()
-        {
-            var isValid = true;
-
-            if (_model != null && _metadata.ValidateChildren)
-            {
-                var strategy = _strategy ?? DefaultComplexObjectValidationStrategy.Instance;
+                var strategy = _strategy ?? defaultStrategy;
                 isValid = VisitChildren(strategy);
             }
             else if (_model != null)
