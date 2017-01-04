@@ -4,16 +4,29 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Microsoft.AspNetCore.Mvc.Internal;
 
-namespace Microsoft.AspNetCore.Mvc.Internal
+namespace Microsoft.AspNetCore.Mvc.ModelBinding.Validation
 {
+    /// <summary>
+    /// Provides and caches <see cref="IModelValidator"/>s for <see cref="ModelMetadata"/>.
+    /// </summary>
     public class ValidatorCache
     {
-        private readonly ConcurrentDictionary<ModelMetadata, CacheEntry> _cacheEntries = new ConcurrentDictionary<ModelMetadata, CacheEntry>();
+        private readonly ConcurrentDictionary<ModelMetadata, CacheEntry> _cacheEntries
+            = new ConcurrentDictionary<ModelMetadata, CacheEntry>();
 
-        public IReadOnlyList<IModelValidator> GetValidators(ModelMetadata metadata, IModelValidatorProvider validatorProvider)
+        /// <summary>
+        /// Provides <see cref="IModelValidator"/>s for <paramref name="metadata"/>.
+        /// </summary>
+        /// <param name="metadata">The <see cref="ModelMetadata"/>.</param>
+        /// <param name="validatorProvider">
+        /// The <see cref="IModelValidatorProvider"/> to use in case of a cache miss.
+        /// </param>
+        /// <returns>List of <see cref="IModelValidator"/>s for <paramref name="metadata"/>.</returns>
+        public IReadOnlyList<IModelValidator> GetValidators(
+            ModelMetadata metadata,
+            IModelValidatorProvider validatorProvider)
         {
             CacheEntry entry;
             if (_cacheEntries.TryGetValue(metadata, out entry))
@@ -56,7 +69,10 @@ namespace Microsoft.AspNetCore.Mvc.Internal
             return validators;
         }
 
-        private IReadOnlyList<IModelValidator> GetValidatorsFromEntry(CacheEntry entry, ModelMetadata metadata, IModelValidatorProvider validationProvider)
+        private IReadOnlyList<IModelValidator> GetValidatorsFromEntry(
+            CacheEntry entry,
+            ModelMetadata metadata,
+            IModelValidatorProvider validationProvider)
         {
             Debug.Assert(entry.Validators != null || entry.Items != null);
 
@@ -84,7 +100,10 @@ namespace Microsoft.AspNetCore.Mvc.Internal
             return ExtractValidators(items);
         }
 
-        private void ExecuteProvider(IModelValidatorProvider validatorProvider, ModelMetadata metadata, List<ValidatorItem> items)
+        private void ExecuteProvider(
+            IModelValidatorProvider validatorProvider,
+            ModelMetadata metadata,
+            List<ValidatorItem> items)
         {
             var context = new ModelValidatorProviderContext(metadata, items);
             validatorProvider.CreateValidators(context);
