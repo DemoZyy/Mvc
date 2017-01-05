@@ -161,7 +161,7 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Validation
         /// <returns><c>true</c> if <paramref name="entry"/> should be validated; <c>false</c> otherwise.</returns>
         protected virtual bool ShouldValidateEntry(ValidationEntry entry, ValidationEntry parentEntry)
         {
-            return true;
+            return entry.Metadata.Validate;
         }
 
         private bool Visit(ModelMetadata metadata, string key, object model)
@@ -254,16 +254,14 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Validation
 
             while (enumerator.MoveNext())
             {
-                if (!ShouldValidateEntry(enumerator.Current, parentEntry))
+                var entry = enumerator.Current;
+                if (!ShouldValidateEntry(entry, parentEntry))
                 {
+                    SuppressValidation(entry.Key);
                     continue;
                 }
 
-                var metadata = enumerator.Current.Metadata;
-                var model = enumerator.Current.Model;
-                var key = enumerator.Current.Key;
-
-                isValid &= Visit(metadata, key, model);
+                isValid &= Visit(entry.Metadata, entry.Key, entry.Model);
             }
 
             return isValid;

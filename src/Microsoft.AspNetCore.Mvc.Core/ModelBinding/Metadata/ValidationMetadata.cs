@@ -19,8 +19,15 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
         public bool? IsRequired { get; set; }
 
         /// <summary>
+        /// Gets or sets a value that indicates whether this model should be validated. See
+        /// <see cref="ModelMetadata.Validate"/>.
+        /// </summary>
+        /// <value>Defaults to <c>true</c>.</value>
+        public bool Validate { get; set; } = true;
+
+        /// <summary>
         /// Gets or sets a value that indicates whether children of the model should be validated. If <c>null</c>
-        /// then <see cref="ModelMetadata.ValidateChildren"/> will be <c>true</c> if either of 
+        /// then <see cref="ModelMetadata.ValidateChildren"/> will be <c>true</c> if either of
         /// <see cref="ModelMetadata.IsComplexType"/> or <see cref="ModelMetadata.IsEnumerableType"/> is <c>true</c>;
         /// <c>false</c> otherwise.
         /// </summary>

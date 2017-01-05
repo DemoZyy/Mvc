@@ -50,6 +50,7 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
             Assert.False(metadata.IsRequired); // Defaults to false for reference types
             Assert.True(metadata.ShowForDisplay);
             Assert.True(metadata.ShowForEdit);
+            Assert.True(metadata.Validate);
 
             Assert.Null(metadata.DataTypeName);
             Assert.Null(metadata.Description);
@@ -657,6 +658,57 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
 
             // Assert
             Assert.True(validateChildren);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Validate_ReflectsValidate_FromValidationMetadata(bool value)
+        {
+            // Arrange
+            var detailsProvider = new EmptyCompositeMetadataDetailsProvider();
+            var provider = new DefaultModelMetadataProvider(detailsProvider);
+
+            var key = ModelMetadataIdentity.ForType(typeof(int));
+            var cache = new DefaultMetadataDetails(key, new ModelAttributes(new object[0]));
+            cache.ValidationMetadata = new ValidationMetadata
+            {
+                Validate = value,
+            };
+
+            var metadata = new DefaultModelMetadata(provider, detailsProvider, cache);
+
+            // Act
+            var validate = metadata.Validate;
+
+            // Assert
+            Assert.Equal(value, validate);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void ValidateChildren_AlwaysFalse_IfValidateFalse(bool value)
+        {
+            // Arrange
+            var detailsProvider = new EmptyCompositeMetadataDetailsProvider();
+            var provider = new DefaultModelMetadataProvider(detailsProvider);
+
+            var key = ModelMetadataIdentity.ForType(typeof(int));
+            var cache = new DefaultMetadataDetails(key, new ModelAttributes(new object[0]));
+            cache.ValidationMetadata = new ValidationMetadata
+            {
+                Validate = false,
+                ValidateChildren = value,
+            };
+
+            var metadata = new DefaultModelMetadata(provider, detailsProvider, cache);
+
+            // Act
+            var validateChildren = metadata.ValidateChildren;
+
+            // Assert
+            Assert.False(validateChildren);
         }
 
         [Fact]

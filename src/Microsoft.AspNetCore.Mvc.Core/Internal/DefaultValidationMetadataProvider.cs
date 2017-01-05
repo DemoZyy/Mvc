@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
+using System.Reflection;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
@@ -32,6 +34,26 @@ namespace Microsoft.AspNetCore.Mvc.Internal
                     {
                         context.ValidationMetadata.ValidatorMetadata.Add(attribute);
                     }
+                }
+            }
+
+            // [ValidateNever] on a type affects properties in that type, not properties that have that type. Thus,
+            // we ignore context.TypeAttributes for properties and don't check at all for types.
+            if (context.Key.MetadataKind == ModelMetadataKind.Property)
+            {
+                var validateNever = context.PropertyAttributes.OfType<ValidateNeverAttribute>().FirstOrDefault();
+                if (validateNever == null)
+                {
+                    // No [ValidateNever] on the property. Check if container has this attribute.
+                    validateNever = context.Key.ContainerType.GetTypeInfo()
+                        .GetCustomAttributes(typeof(ValidateNeverAttribute), inherit: true)
+                        .Cast<ValidateNeverAttribute>()
+                        .FirstOrDefault();
+                }
+
+                if (validateNever != null)
+                {
+                    context.ValidationMetadata.Validate = false;
                 }
             }
         }

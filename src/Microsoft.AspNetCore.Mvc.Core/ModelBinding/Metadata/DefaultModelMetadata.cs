@@ -532,10 +532,24 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
         }
 
         /// <inheritdoc />
+        public override bool Validate
+        {
+            get
+            {
+                return ValidationMetadata.Validate;
+            }
+        }
+
+        /// <inheritdoc />
         public override bool ValidateChildren
         {
             get
             {
+                if (!Validate)
+                {
+                    return false;
+                }
+
                 if (!_validateChildren.HasValue)
                 {
                     if (ValidationMetadata.ValidateChildren.HasValue)

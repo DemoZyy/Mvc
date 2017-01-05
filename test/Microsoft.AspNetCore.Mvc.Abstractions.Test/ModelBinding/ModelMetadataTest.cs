@@ -576,6 +576,14 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
                 }
             }
 
+            public override bool Validate
+            {
+                get
+                {
+                    throw new NotImplementedException();
+                }
+            }
+
             public override bool ValidateChildren
             {
                 get

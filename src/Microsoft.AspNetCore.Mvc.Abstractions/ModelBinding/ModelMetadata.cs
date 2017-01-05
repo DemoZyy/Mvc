@@ -296,8 +296,17 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
         public abstract string TemplateHint { get; }
 
         /// <summary>
+        /// Gets a value that indicates whether this model should be validated.
+        /// </summary>
+        /// <value>Defaults to <c>true</c>.</value>
+        public abstract bool Validate { get; }
+
+        /// <summary>
         /// Gets a value that indicates whether properties or elements of the model should be validated.
         /// </summary>
+        /// <value>
+        /// Always <c>false</c> if <see cref="Validate"/> is <c>false</c>.
+        /// </value>
         public abstract bool ValidateChildren { get; }
 
         /// <summary>

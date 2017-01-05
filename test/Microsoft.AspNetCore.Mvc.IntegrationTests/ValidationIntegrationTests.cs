@@ -11,7 +11,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -1220,6 +1225,198 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             var error = entry.Errors[0];
             Assert.Equal("The value '-123' is not valid for Zip.", error.ErrorMessage);
+        }
+
+        private class NeverValid : IValidatableObject
+        {
+            public string NeverValidProperty { get; set; }
+
+            public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+            {
+                return new[] { new ValidationResult("This is not valid.") };
+            }
+        }
+
+        private class NeverValidAttribute : ValidationAttribute
+        {
+            protected override ValidationResult IsValid(object value, ValidationContext validationContext)
+            {
+                if (value == null)
+                {
+                    // ValidationVisitor visits _all_ properties of simple types (by default). But, like most
+                    // reasonable ValidationAttributes, this one ignores null property values.
+                    return ValidationResult.Success;
+                }
+
+                return new ValidationResult("Properties with this are not valid.");
+            }
+        }
+
+        private class SomeNeverValidProperties
+        {
+            public NeverValid NeverValid { get; set; }
+
+            [NeverValid]
+            public string NeverValidBecauseAttribute { get; set; }
+
+            [ValidateNever]
+            [NeverValid]
+            public string ValidateNever { get; set; }
+        }
+
+        [ValidateNever]
+        private class ValidateNeverProperties : SomeNeverValidProperties
+        {
+        }
+
+        [Fact]
+        public async Task IValidatableObject_IsValidated()
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(SomeNeverValidProperties),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext(
+                request => request.QueryString
+                    = new QueryString($"?{nameof(SomeNeverValidProperties.NeverValid)}.{nameof(NeverValid.NeverValidProperty)}=1"));
+
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
+            var modelState = testContext.ModelState;
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            var model = Assert.IsType<SomeNeverValidProperties>(result.Model);
+            Assert.Equal("1", model.NeverValid.NeverValidProperty);
+
+            Assert.False(modelState.IsValid);
+            Assert.Equal(1, modelState.ErrorCount);
+            Assert.Collection(
+                modelState,
+                state =>
+                {
+                    Assert.Equal(nameof(SomeNeverValidProperties.NeverValid), state.Key);
+                    Assert.Equal(ModelValidationState.Invalid, state.Value.ValidationState);
+
+                    var error = Assert.Single(state.Value.Errors);
+                    Assert.Equal("This is not valid.", error.ErrorMessage);
+                    Assert.Null(error.Exception);
+                },
+                state =>
+                {
+                    Assert.Equal(
+                        $"{nameof(SomeNeverValidProperties.NeverValid)}.{nameof(NeverValid.NeverValidProperty)}",
+                        state.Key);
+                    Assert.Equal(ModelValidationState.Valid, state.Value.ValidationState);
+                });
+        }
+
+        [Fact]
+        public async Task CustomValidationAttribute_IsValidated()
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(SomeNeverValidProperties),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext(
+                request => request.QueryString
+                    = new QueryString($"?{nameof(SomeNeverValidProperties.NeverValidBecauseAttribute)}=1"));
+
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
+            var modelState = testContext.ModelState;
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            var model = Assert.IsType<SomeNeverValidProperties>(result.Model);
+            Assert.Equal("1", model.NeverValidBecauseAttribute);
+
+            Assert.False(modelState.IsValid);
+            Assert.Equal(1, modelState.ErrorCount);
+            var kvp = Assert.Single(modelState);
+            Assert.Equal(nameof(SomeNeverValidProperties.NeverValidBecauseAttribute), kvp.Key);
+            var state = kvp.Value;
+            Assert.NotNull(state);
+            Assert.Equal(ModelValidationState.Invalid, state.ValidationState);
+            var error = Assert.Single(state.Errors);
+            Assert.Equal("Properties with this are not valid.", error.ErrorMessage);
+            Assert.Null(error.Exception);
+        }
+
+        [Theory]
+        [InlineData(nameof(SomeNeverValidProperties.NeverValid) + "." + nameof(NeverValid.NeverValidProperty))]
+        [InlineData(nameof(SomeNeverValidProperties.NeverValidBecauseAttribute))]
+        [InlineData(nameof(SomeNeverValidProperties.ValidateNever))]
+        public async Task ValidateNeverProperty_IsSkipped(string propertyName)
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(ValidateNeverProperties),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext(
+                request => request.QueryString = new QueryString($"?{propertyName}=1"));
+
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
+            var modelState = testContext.ModelState;
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            Assert.IsType<ValidateNeverProperties>(result.Model);
+
+            Assert.True(modelState.IsValid);
+            var kvp = Assert.Single(modelState);
+            Assert.Equal(propertyName, kvp.Key);
+            var state = kvp.Value;
+            Assert.NotNull(state);
+            Assert.Equal(ModelValidationState.Skipped, state.ValidationState);
+        }
+
+        [Fact]
+        public async Task PropertyWithinValidateNeverType_IsSkipped()
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(SomeNeverValidProperties),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext(
+                request => request.QueryString = new QueryString("?ValidateNever=1"));
+
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
+            var modelState = testContext.ModelState;
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            var model = Assert.IsType<SomeNeverValidProperties>(result.Model);
+            Assert.Equal("1", model.ValidateNever);
+
+            Assert.True(modelState.IsValid);
+            var kvp = Assert.Single(modelState);
+            Assert.Equal(nameof(SomeNeverValidProperties.ValidateNever), kvp.Key);
+            var state = kvp.Value;
+            Assert.NotNull(state);
+            Assert.Equal(ModelValidationState.Skipped, state.ValidationState);
         }
 
         private class Order11
