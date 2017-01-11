@@ -1419,6 +1419,157 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.Equal(ModelValidationState.Skipped, state.ValidationState);
         }
 
+        private class ValidatePropertiesSometimes
+        {
+            public string NeverNull { get; set; }
+
+            public string Control { get; set; }
+
+            public int Length => Control.Length;
+        }
+
+        private class ValidateSometimesVisitor : ValidationVisitor
+        {
+            public ValidateSometimesVisitor(
+                ActionContext actionContext,
+                IModelValidatorProvider validatorProvider,
+                ValidatorCache validatorCache,
+                IModelMetadataProvider metadataProvider,
+                ValidationStateDictionary validationState)
+                : base(actionContext, validatorProvider, validatorCache, metadataProvider, validationState)
+            {
+            }
+
+            protected override bool ShouldValidateEntry(ValidationEntry entry, ValidationEntry parentEntry)
+            {
+                if (entry.Metadata.MetadataKind == ModelMetadataKind.Property &&
+                    string.Equals(
+                        nameof(ValidatePropertiesSometimes.Length),
+                        entry.Metadata.PropertyName,
+                        StringComparison.Ordinal) &&
+                    parentEntry.Metadata?.ModelType == typeof(ValidatePropertiesSometimes))
+                {
+                    var sometimes = (ValidatePropertiesSometimes)(parentEntry.Model);
+                    if (sometimes.Control == null)
+                    {
+                        return false;
+                    }
+                }
+
+                return base.ShouldValidateEntry(entry, parentEntry);
+            }
+        }
+
+        private class UseValidateSometimesVisitor : DefaultObjectValidator
+        {
+            public UseValidateSometimesVisitor(
+                IModelMetadataProvider metadataProvider,
+                IList<IModelValidatorProvider> validatorProviders)
+                : base(metadataProvider, validatorProviders)
+            {
+            }
+
+            protected override ValidationVisitor CreateVisitor(
+                ActionContext actionContext,
+                ValidationStateDictionary validationState)
+            {
+                return new ValidateSometimesVisitor(
+                    actionContext,
+                    ValidatorProvider,
+                    ValidatorCache,
+                    MetadataProvider,
+                    validationState);
+            }
+        }
+
+        [Fact]
+        public async Task PropertyToSometimesSkip_IsSkipped_IfControlIsNull()
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(ValidatePropertiesSometimes),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext(
+                request => request.QueryString = new QueryString($"?{nameof(ValidatePropertiesSometimes.NeverNull)}=1"));
+
+            var metadataProvider = testContext.MetadataProvider;
+            var modelState = testContext.ModelState;
+            var options = testContext.HttpContext.RequestServices.GetRequiredService<IOptions<MvcOptions>>();
+            var validatorProviders = options.Value.ModelValidatorProviders;
+            var validator = new UseValidateSometimesVisitor(metadataProvider, validatorProviders);
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder(metadataProvider, validator: validator);
+
+            // Add an entry for the "Length" property so that we can observe Skipped versus Valid states.
+            modelState.SetModelValue(nameof(ValidatePropertiesSometimes.Length), rawValue: null, attemptedValue: null);
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            var model = Assert.IsType<ValidatePropertiesSometimes>(result.Model);
+            Assert.Null(model.Control);
+            Assert.Equal("1", model.NeverNull);
+
+            Assert.True(modelState.IsValid);
+            Assert.Collection(
+                modelState,
+                state =>
+                {
+                    Assert.Equal(nameof(ValidatePropertiesSometimes.Length), state.Key);
+                    Assert.Equal(ModelValidationState.Skipped, state.Value.ValidationState);
+                },
+                state => Assert.Equal(nameof(ValidatePropertiesSometimes.NeverNull), state.Key));
+        }
+
+        [Fact]
+        public async Task PropertyToSometimesSkip_IsValidated_IfControlIsNotNull()
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(ValidatePropertiesSometimes),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext(
+                request => request.QueryString = new QueryString(
+                    $"?{nameof(ValidatePropertiesSometimes.NeverNull)}=1&{nameof(ValidatePropertiesSometimes.Control)}=2"));
+
+            var metadataProvider = testContext.MetadataProvider;
+            var modelState = testContext.ModelState;
+            var options = testContext.HttpContext.RequestServices.GetRequiredService<IOptions<MvcOptions>>();
+            var validatorProviders = options.Value.ModelValidatorProviders;
+            var validator = new UseValidateSometimesVisitor(metadataProvider, validatorProviders);
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder(metadataProvider, validator: validator);
+
+            // Add an entry for the "Length" property so that we can observe Skipped versus Valid states.
+            modelState.SetModelValue(nameof(ValidatePropertiesSometimes.Length), rawValue: null, attemptedValue: null);
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            var model = Assert.IsType<ValidatePropertiesSometimes>(result.Model);
+            Assert.Equal("2", model.Control);
+            Assert.Equal("1", model.NeverNull);
+
+            Assert.True(modelState.IsValid);
+            Assert.Collection(
+                modelState,
+                state =>
+                {
+                    Assert.Equal(nameof(ValidatePropertiesSometimes.Length), state.Key);
+                    Assert.Equal(ModelValidationState.Valid, state.Value.ValidationState);
+                },
+                state => Assert.Equal(nameof(ValidatePropertiesSometimes.Control), state.Key),
+                state => Assert.Equal(nameof(ValidatePropertiesSometimes.NeverNull), state.Key));
+        }
+
         private class Order11
         {
             public IEnumerable<Address> ShippingAddresses { get; set; }
