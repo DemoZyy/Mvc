@@ -153,17 +153,6 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Validation
             }
         }
 
-        /// <summary>
-        /// Gets an indication whether the <paramref name="entry"/> should be validated.
-        /// </summary>
-        /// <param name="entry"><see cref="ValidationEntry"/> to check.</param>
-        /// <param name="parentEntry"><see cref="ValidationEntry"/> containing <paramref name="entry"/>.</param>
-        /// <returns><c>true</c> if <paramref name="entry"/> should be validated; <c>false</c> otherwise.</returns>
-        protected virtual bool ShouldValidateEntry(ValidationEntry entry, ValidationEntry parentEntry)
-        {
-            return entry.Metadata.Validate;
-        }
-
         private bool Visit(ModelMetadata metadata, string key, object model)
         {
             RuntimeHelpers.EnsureSufficientExecutionStack();
@@ -250,18 +239,14 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Validation
         {
             var isValid = true;
             var enumerator = strategy.GetChildren(_metadata, _key, _model);
-            var parentEntry = new ValidationEntry(_metadata, _key, _model);
 
             while (enumerator.MoveNext())
             {
-                var entry = enumerator.Current;
-                if (!ShouldValidateEntry(entry, parentEntry))
-                {
-                    SuppressValidation(entry.Key);
-                    continue;
-                }
+                var metadata = enumerator.Current.Metadata;
+                var model = enumerator.Current.Model;
+                var key = enumerator.Current.Key;
 
-                isValid &= Visit(entry.Metadata, entry.Key, entry.Model);
+                isValid &= Visit(metadata, key, model);
             }
 
             return isValid;
