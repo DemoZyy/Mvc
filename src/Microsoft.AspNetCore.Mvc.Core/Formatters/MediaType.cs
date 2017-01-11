@@ -54,8 +54,15 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
                 throw new ArgumentOutOfRangeException(nameof(offset));
             }
 
-            if (length != null && offset + length > mediaType.Length)
+            if (length < 0)
             {
+                throw new ArgumentOutOfRangeException(nameof(length));
+            }
+
+            if (offset > mediaType.Length - length)
+            {
+                // TODO: This isn't necessarily length's fault but changing this to an ArgumentException with the
+                // appropriate message would be a breaking change.
                 throw new ArgumentOutOfRangeException(nameof(length));
             }
 
