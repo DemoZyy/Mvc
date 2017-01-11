@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
 {
@@ -19,11 +20,10 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
         public bool? IsRequired { get; set; }
 
         /// <summary>
-        /// Gets or sets a value that indicates whether this model should be validated. See
-        /// <see cref="ModelMetadata.Validate"/>.
+        /// Gets or sets an <see cref="IShouldValidate"/> implementation that indicates whether this model should be
+        /// validated. See <see cref="ModelMetadata.ShouldValidate"/>.
         /// </summary>
-        /// <value>Defaults to <c>true</c>.</value>
-        public bool Validate { get; set; } = true;
+        public IShouldValidate ShouldValidate { get; set; }
 
         /// <summary>
         /// Gets or sets a value that indicates whether children of the model should be validated. If <c>null</c>

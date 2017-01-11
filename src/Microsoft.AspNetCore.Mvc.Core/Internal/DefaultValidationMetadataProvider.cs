@@ -37,24 +37,21 @@ namespace Microsoft.AspNetCore.Mvc.Internal
                 }
             }
 
-            // [ValidateNever] on a type affects properties in that type, not properties that have that type. Thus,
-            // we ignore context.TypeAttributes for properties and don't check at all for types.
+            // IShouldValidate attributes on a type affect properties in that type, not properties that have that type.
+            // Thus, we ignore context.TypeAttributes for properties and don't check at all for types.
             if (context.Key.MetadataKind == ModelMetadataKind.Property)
             {
-                var validateNever = context.PropertyAttributes.OfType<ValidateNeverAttribute>().FirstOrDefault();
-                if (validateNever == null)
+                var shouldValidate = context.PropertyAttributes.OfType<IShouldValidate>().FirstOrDefault();
+                if (shouldValidate == null)
                 {
                     // No [ValidateNever] on the property. Check if container has this attribute.
-                    validateNever = context.Key.ContainerType.GetTypeInfo()
-                        .GetCustomAttributes(typeof(ValidateNeverAttribute), inherit: true)
-                        .Cast<ValidateNeverAttribute>()
+                    shouldValidate = context.Key.ContainerType.GetTypeInfo()
+                        .GetCustomAttributes(inherit: true)
+                        .OfType<IShouldValidate>()
                         .FirstOrDefault();
                 }
 
-                if (validateNever != null)
-                {
-                    context.ValidationMetadata.Validate = false;
-                }
+                context.ValidationMetadata.ShouldValidate = shouldValidate;
             }
         }
     }

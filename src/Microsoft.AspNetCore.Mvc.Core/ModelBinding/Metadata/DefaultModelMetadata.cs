@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
 {
@@ -532,11 +533,11 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
         }
 
         /// <inheritdoc />
-        public override bool Validate
+        public override IShouldValidate ShouldValidate
         {
             get
             {
-                return ValidationMetadata.Validate;
+                return ValidationMetadata.ShouldValidate;
             }
         }
 
@@ -545,11 +546,6 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
         {
             get
             {
-                if (!Validate)
-                {
-                    return false;
-                }
-
                 if (!_validateChildren.HasValue)
                 {
                     if (ValidationMetadata.ValidateChildren.HasValue)

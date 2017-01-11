@@ -59,8 +59,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
         public static DefaultControllerArgumentBinder GetArgumentBinder(
             IModelMetadataProvider metadataProvider,
-            IModelBinderProvider binderProvider = null,
-            IObjectModelValidator validator = null)
+            IModelBinderProvider binderProvider = null)
         {
             var services = GetServices();
             var options = services.GetRequiredService<IOptions<MvcOptions>>();
@@ -70,15 +69,10 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
                 options.Value.ModelBinderProviders.Insert(0, binderProvider);
             }
 
-            if (validator == null)
-            {
-                validator = GetObjectValidator(metadataProvider, options);
-            }
-
             return new DefaultControllerArgumentBinder(
                 metadataProvider,
                 new ModelBinderFactory(metadataProvider, options),
-                validator);
+                GetObjectValidator(metadataProvider, options));
         }
 
         public static IObjectModelValidator GetObjectValidator(

@@ -12,7 +12,7 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
     public class DefaultValidationMetadataProviderTest
     {
         [Fact]
-        public void Validate_False_IfPropertyHasValidateNever()
+        public void ShouldValidate_ShouldValidateEntry_False_IfPropertyHasValidateNever()
         {
             // Arrange
             var provider = new DefaultValidationMetadataProvider();
@@ -25,11 +25,14 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
             provider.CreateValidationMetadata(context);
 
             // Assert
-            Assert.False(context.ValidationMetadata.Validate);
+            Assert.NotNull(context.ValidationMetadata.ShouldValidate);
+            Assert.False(context.ValidationMetadata.ShouldValidate.ShouldValidateEntry(
+                new ValidationEntry(),
+                new ValidationEntry()));
         }
 
         [Fact]
-        public void Validate_True_IfPropertyHasValidateNeverOnItsType()
+        public void ShouldValidate_Null_IfPropertyHasValidateNeverOnItsType()
         {
             // Arrange
             var provider = new DefaultValidationMetadataProvider();
@@ -42,11 +45,11 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
             provider.CreateValidationMetadata(context);
 
             // Assert
-            Assert.True(context.ValidationMetadata.Validate);
+            Assert.Null(context.ValidationMetadata.ShouldValidate);
         }
 
         [Fact]
-        public void Validate_True_ForType()
+        public void ShouldValidate_Null_ForType()
         {
             // Arrange
             var provider = new DefaultValidationMetadataProvider();
@@ -59,11 +62,11 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
             provider.CreateValidationMetadata(context);
 
             // Assert
-            Assert.True(context.ValidationMetadata.Validate);
+            Assert.Null(context.ValidationMetadata.ShouldValidate);
         }
 
         [Fact]
-        public void Validate_False_IfContainingTypeHasValidateNever()
+        public void ShouldValidate_ShouldValidateEntry_False_IfContainingTypeHasValidateNever()
         {
             // Arrange
             var provider = new DefaultValidationMetadataProvider();
@@ -78,11 +81,14 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
             provider.CreateValidationMetadata(context);
 
             // Assert
-            Assert.False(context.ValidationMetadata.Validate);
+            Assert.NotNull(context.ValidationMetadata.ShouldValidate);
+            Assert.False(context.ValidationMetadata.ShouldValidate.ShouldValidateEntry(
+                new ValidationEntry(),
+                new ValidationEntry()));
         }
 
         [Fact]
-        public void Validate_False_IfContainingTypeInheritsValidateNever()
+        public void ShouldValidate_ShouldValidateEntry_False_IfContainingTypeInheritsValidateNever()
         {
             // Arrange
             var provider = new DefaultValidationMetadataProvider();
@@ -97,7 +103,10 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Metadata
             provider.CreateValidationMetadata(context);
 
             // Assert
-            Assert.False(context.ValidationMetadata.Validate);
+            Assert.NotNull(context.ValidationMetadata.ShouldValidate);
+            Assert.False(context.ValidationMetadata.ShouldValidate.ShouldValidateEntry(
+                new ValidationEntry(),
+                new ValidationEntry()));
         }
 
         [Fact]

@@ -11,12 +11,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -1241,10 +1238,10 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
         {
             protected override ValidationResult IsValid(object value, ValidationContext validationContext)
             {
+                // By default, ValidationVisitor visits _all_ properties within a non-null complex object.
+                // But, like most reasonable ValidationAttributes, NeverValidAttribute ignores null property values.
                 if (value == null)
                 {
-                    // ValidationVisitor visits _all_ properties of simple types (by default). But, like most
-                    // reasonable ValidationAttributes, this one ignores null property values.
                     return ValidationResult.Success;
                 }
 
@@ -1252,7 +1249,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             }
         }
 
-        private class SomeNeverValidProperties
+        private class ValidateSomeProperties
         {
             public NeverValid NeverValid { get; set; }
 
@@ -1262,10 +1259,13 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             [ValidateNever]
             [NeverValid]
             public string ValidateNever { get; set; }
+
+            [ValidateNever]
+            public int ValidateNeverLength => ValidateNever.Length;
         }
 
         [ValidateNever]
-        private class ValidateNeverProperties : SomeNeverValidProperties
+        private class ValidateNoProperties : ValidateSomeProperties
         {
         }
 
@@ -1276,12 +1276,12 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             var parameter = new ParameterDescriptor
             {
                 Name = "parameter",
-                ParameterType = typeof(SomeNeverValidProperties),
+                ParameterType = typeof(ValidateSomeProperties),
             };
 
             var testContext = ModelBindingTestHelper.GetTestContext(
                 request => request.QueryString
-                    = new QueryString($"?{nameof(SomeNeverValidProperties.NeverValid)}.{nameof(NeverValid.NeverValidProperty)}=1"));
+                    = new QueryString($"?{nameof(ValidateSomeProperties.NeverValid)}.{nameof(NeverValid.NeverValidProperty)}=1"));
 
             var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
             var modelState = testContext.ModelState;
@@ -1291,7 +1291,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Assert
             Assert.True(result.IsModelSet);
-            var model = Assert.IsType<SomeNeverValidProperties>(result.Model);
+            var model = Assert.IsType<ValidateSomeProperties>(result.Model);
             Assert.Equal("1", model.NeverValid.NeverValidProperty);
 
             Assert.False(modelState.IsValid);
@@ -1300,7 +1300,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
                 modelState,
                 state =>
                 {
-                    Assert.Equal(nameof(SomeNeverValidProperties.NeverValid), state.Key);
+                    Assert.Equal(nameof(ValidateSomeProperties.NeverValid), state.Key);
                     Assert.Equal(ModelValidationState.Invalid, state.Value.ValidationState);
 
                     var error = Assert.Single(state.Value.Errors);
@@ -1310,7 +1310,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
                 state =>
                 {
                     Assert.Equal(
-                        $"{nameof(SomeNeverValidProperties.NeverValid)}.{nameof(NeverValid.NeverValidProperty)}",
+                        $"{nameof(ValidateSomeProperties.NeverValid)}.{nameof(NeverValid.NeverValidProperty)}",
                         state.Key);
                     Assert.Equal(ModelValidationState.Valid, state.Value.ValidationState);
                 });
@@ -1323,12 +1323,12 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             var parameter = new ParameterDescriptor
             {
                 Name = "parameter",
-                ParameterType = typeof(SomeNeverValidProperties),
+                ParameterType = typeof(ValidateSomeProperties),
             };
 
             var testContext = ModelBindingTestHelper.GetTestContext(
                 request => request.QueryString
-                    = new QueryString($"?{nameof(SomeNeverValidProperties.NeverValidBecauseAttribute)}=1"));
+                    = new QueryString($"?{nameof(ValidateSomeProperties.NeverValidBecauseAttribute)}=1"));
 
             var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
             var modelState = testContext.ModelState;
@@ -1338,13 +1338,13 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Assert
             Assert.True(result.IsModelSet);
-            var model = Assert.IsType<SomeNeverValidProperties>(result.Model);
+            var model = Assert.IsType<ValidateSomeProperties>(result.Model);
             Assert.Equal("1", model.NeverValidBecauseAttribute);
 
             Assert.False(modelState.IsValid);
             Assert.Equal(1, modelState.ErrorCount);
             var kvp = Assert.Single(modelState);
-            Assert.Equal(nameof(SomeNeverValidProperties.NeverValidBecauseAttribute), kvp.Key);
+            Assert.Equal(nameof(ValidateSomeProperties.NeverValidBecauseAttribute), kvp.Key);
             var state = kvp.Value;
             Assert.NotNull(state);
             Assert.Equal(ModelValidationState.Invalid, state.ValidationState);
@@ -1353,17 +1353,78 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.Null(error.Exception);
         }
 
-        [Theory]
-        [InlineData(nameof(SomeNeverValidProperties.NeverValid) + "." + nameof(NeverValid.NeverValidProperty))]
-        [InlineData(nameof(SomeNeverValidProperties.NeverValidBecauseAttribute))]
-        [InlineData(nameof(SomeNeverValidProperties.ValidateNever))]
-        public async Task ValidateNeverProperty_IsSkipped(string propertyName)
+        [Fact]
+        public async Task ValidateNeverProperty_IsSkipped()
         {
             // Arrange
             var parameter = new ParameterDescriptor
             {
                 Name = "parameter",
-                ParameterType = typeof(ValidateNeverProperties),
+                ParameterType = typeof(ValidateSomeProperties),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext(
+                request => request.QueryString
+                    = new QueryString($"?{nameof(ValidateSomeProperties.ValidateNever)}=1"));
+
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
+            var modelState = testContext.ModelState;
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            var model = Assert.IsType<ValidateSomeProperties>(result.Model);
+            Assert.Equal("1", model.ValidateNever);
+
+            Assert.True(modelState.IsValid);
+            var kvp = Assert.Single(modelState);
+            Assert.Equal(nameof(ValidateSomeProperties.ValidateNever), kvp.Key);
+            var state = kvp.Value;
+            Assert.NotNull(state);
+            Assert.Equal(ModelValidationState.Skipped, state.ValidationState);
+        }
+
+        [Fact]
+        public async Task ValidateNeverProperty_IsSkippedWithoutAccessingModel()
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(ValidateSomeProperties),
+            };
+
+            var testContext = ModelBindingTestHelper.GetTestContext();
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
+            var modelState = testContext.ModelState;
+
+            // Act
+            var result = await argumentBinder.BindModelAsync(parameter, testContext);
+
+            // Assert
+            Assert.True(result.IsModelSet);
+            var model = Assert.IsType<ValidateSomeProperties>(result.Model);
+
+            // Note this Exception is not thrown earlier.
+            Assert.Throws<NullReferenceException>(() => model.ValidateNeverLength);
+
+            Assert.True(modelState.IsValid);
+            Assert.Empty(modelState);
+        }
+
+        [Theory]
+        [InlineData(nameof(ValidateSomeProperties.NeverValid) + "." + nameof(NeverValid.NeverValidProperty))]
+        [InlineData(nameof(ValidateSomeProperties.NeverValidBecauseAttribute))]
+        [InlineData(nameof(ValidateSomeProperties.ValidateNever))]
+        public async Task PropertyWithinValidateNeverType_IsSkipped(string propertyName)
+        {
+            // Arrange
+            var parameter = new ParameterDescriptor
+            {
+                Name = "parameter",
+                ParameterType = typeof(ValidateNoProperties),
             };
 
             var testContext = ModelBindingTestHelper.GetTestContext(
@@ -1377,7 +1438,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Assert
             Assert.True(result.IsModelSet);
-            Assert.IsType<ValidateNeverProperties>(result.Model);
+            Assert.IsType<ValidateNoProperties>(result.Model);
 
             Assert.True(modelState.IsValid);
             var kvp = Assert.Single(modelState);
@@ -1387,99 +1448,41 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.Equal(ModelValidationState.Skipped, state.ValidationState);
         }
 
-        [Fact]
-        public async Task PropertyWithinValidateNeverType_IsSkipped()
+        private class ValidateSometimesAttribute : Attribute, IShouldValidate
         {
-            // Arrange
-            var parameter = new ParameterDescriptor
+            private readonly string _otherProperty;
+
+            public ValidateSometimesAttribute(string otherProperty)
             {
-                Name = "parameter",
-                ParameterType = typeof(SomeNeverValidProperties),
-            };
-
-            var testContext = ModelBindingTestHelper.GetTestContext(
-                request => request.QueryString = new QueryString("?ValidateNever=1"));
-
-            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
-            var modelState = testContext.ModelState;
-
-            // Act
-            var result = await argumentBinder.BindModelAsync(parameter, testContext);
-
-            // Assert
-            Assert.True(result.IsModelSet);
-            var model = Assert.IsType<SomeNeverValidProperties>(result.Model);
-            Assert.Equal("1", model.ValidateNever);
-
-            Assert.True(modelState.IsValid);
-            var kvp = Assert.Single(modelState);
-            Assert.Equal(nameof(SomeNeverValidProperties.ValidateNever), kvp.Key);
-            var state = kvp.Value;
-            Assert.NotNull(state);
-            Assert.Equal(ModelValidationState.Skipped, state.ValidationState);
-        }
-
-        private class ValidatePropertiesSometimes
-        {
-            public string NeverNull { get; set; }
-
-            public string Control { get; set; }
-
-            public int Length => Control.Length;
-        }
-
-        private class ValidateSometimesVisitor : ValidationVisitor
-        {
-            public ValidateSometimesVisitor(
-                ActionContext actionContext,
-                IModelValidatorProvider validatorProvider,
-                ValidatorCache validatorCache,
-                IModelMetadataProvider metadataProvider,
-                ValidationStateDictionary validationState)
-                : base(actionContext, validatorProvider, validatorCache, metadataProvider, validationState)
-            {
+                // Would null-check otherProperty in real life.
+                _otherProperty = otherProperty;
             }
 
-            protected override bool ShouldValidateEntry(ValidationEntry entry, ValidationEntry parentEntry)
+            public bool ShouldValidateEntry(ValidationEntry entry, ValidationEntry parentEntry)
             {
                 if (entry.Metadata.MetadataKind == ModelMetadataKind.Property &&
-                    string.Equals(
-                        nameof(ValidatePropertiesSometimes.Length),
-                        entry.Metadata.PropertyName,
-                        StringComparison.Ordinal) &&
-                    parentEntry.Metadata?.ModelType == typeof(ValidatePropertiesSometimes))
+                    parentEntry.Metadata != null)
                 {
-                    var sometimes = (ValidatePropertiesSometimes)(parentEntry.Model);
-                    if (sometimes.Control == null)
+                    // In real life, would throw an InvalidOperationException if otherProperty were null i.e. the
+                    // property was not known. Could also assert container is non-null (see ValidationVisitor).
+                    var container = parentEntry.Model;
+                    var otherProperty = parentEntry.Metadata.Properties[_otherProperty];
+                    if (otherProperty.PropertyGetter(container) == null)
                     {
                         return false;
                     }
                 }
 
-                return base.ShouldValidateEntry(entry, parentEntry);
+                return true;
             }
         }
 
-        private class UseValidateSometimesVisitor : DefaultObjectValidator
+        private class ValidateSomePropertiesSometimes
         {
-            public UseValidateSometimesVisitor(
-                IModelMetadataProvider metadataProvider,
-                IList<IModelValidatorProvider> validatorProviders)
-                : base(metadataProvider, validatorProviders)
-            {
-            }
+            public string Control { get; set; }
 
-            protected override ValidationVisitor CreateVisitor(
-                ActionContext actionContext,
-                ValidationStateDictionary validationState)
-            {
-                return new ValidateSometimesVisitor(
-                    actionContext,
-                    ValidatorProvider,
-                    ValidatorCache,
-                    MetadataProvider,
-                    validationState);
-            }
+            [ValidateSometimes(nameof(Control))]
+            public int ControlLength => Control.Length;
         }
 
         [Fact]
@@ -1489,40 +1492,34 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             var parameter = new ParameterDescriptor
             {
                 Name = "parameter",
-                ParameterType = typeof(ValidatePropertiesSometimes),
+                ParameterType = typeof(ValidateSomePropertiesSometimes),
             };
 
-            var testContext = ModelBindingTestHelper.GetTestContext(
-                request => request.QueryString = new QueryString($"?{nameof(ValidatePropertiesSometimes.NeverNull)}=1"));
-
-            var metadataProvider = testContext.MetadataProvider;
+            var testContext = ModelBindingTestHelper.GetTestContext();
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
             var modelState = testContext.ModelState;
-            var options = testContext.HttpContext.RequestServices.GetRequiredService<IOptions<MvcOptions>>();
-            var validatorProviders = options.Value.ModelValidatorProviders;
-            var validator = new UseValidateSometimesVisitor(metadataProvider, validatorProviders);
-            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder(metadataProvider, validator: validator);
 
-            // Add an entry for the "Length" property so that we can observe Skipped versus Valid states.
-            modelState.SetModelValue(nameof(ValidatePropertiesSometimes.Length), rawValue: null, attemptedValue: null);
+            // Add an entry for the ControlLength property so that we can observe Skipped versus Valid states.
+            modelState.SetModelValue(
+                nameof(ValidateSomePropertiesSometimes.ControlLength),
+                rawValue: null,
+                attemptedValue: null);
 
             // Act
             var result = await argumentBinder.BindModelAsync(parameter, testContext);
 
             // Assert
             Assert.True(result.IsModelSet);
-            var model = Assert.IsType<ValidatePropertiesSometimes>(result.Model);
+            var model = Assert.IsType<ValidateSomePropertiesSometimes>(result.Model);
             Assert.Null(model.Control);
-            Assert.Equal("1", model.NeverNull);
+
+            // Note this Exception is not thrown earlier.
+            Assert.Throws<NullReferenceException>(() => model.ControlLength);
 
             Assert.True(modelState.IsValid);
-            Assert.Collection(
-                modelState,
-                state =>
-                {
-                    Assert.Equal(nameof(ValidatePropertiesSometimes.Length), state.Key);
-                    Assert.Equal(ModelValidationState.Skipped, state.Value.ValidationState);
-                },
-                state => Assert.Equal(nameof(ValidatePropertiesSometimes.NeverNull), state.Key));
+            var kvp = Assert.Single(modelState);
+            Assert.Equal(nameof(ValidateSomePropertiesSometimes.ControlLength), kvp.Key);
+            Assert.Equal(ModelValidationState.Skipped, kvp.Value.ValidationState);
         }
 
         [Fact]
@@ -1532,42 +1529,40 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             var parameter = new ParameterDescriptor
             {
                 Name = "parameter",
-                ParameterType = typeof(ValidatePropertiesSometimes),
+                ParameterType = typeof(ValidateSomePropertiesSometimes),
             };
 
             var testContext = ModelBindingTestHelper.GetTestContext(
                 request => request.QueryString = new QueryString(
-                    $"?{nameof(ValidatePropertiesSometimes.NeverNull)}=1&{nameof(ValidatePropertiesSometimes.Control)}=2"));
+                    $"?{nameof(ValidateSomePropertiesSometimes.Control)}=1"));
 
-            var metadataProvider = testContext.MetadataProvider;
+            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder();
             var modelState = testContext.ModelState;
-            var options = testContext.HttpContext.RequestServices.GetRequiredService<IOptions<MvcOptions>>();
-            var validatorProviders = options.Value.ModelValidatorProviders;
-            var validator = new UseValidateSometimesVisitor(metadataProvider, validatorProviders);
-            var argumentBinder = ModelBindingTestHelper.GetArgumentBinder(metadataProvider, validator: validator);
 
-            // Add an entry for the "Length" property so that we can observe Skipped versus Valid states.
-            modelState.SetModelValue(nameof(ValidatePropertiesSometimes.Length), rawValue: null, attemptedValue: null);
+            // Add an entry for the ControlLength property so that we can observe Skipped versus Valid states.
+            modelState.SetModelValue(
+                nameof(ValidateSomePropertiesSometimes.ControlLength),
+                rawValue: null,
+                attemptedValue: null);
 
             // Act
             var result = await argumentBinder.BindModelAsync(parameter, testContext);
 
             // Assert
             Assert.True(result.IsModelSet);
-            var model = Assert.IsType<ValidatePropertiesSometimes>(result.Model);
-            Assert.Equal("2", model.Control);
-            Assert.Equal("1", model.NeverNull);
+            var model = Assert.IsType<ValidateSomePropertiesSometimes>(result.Model);
+            Assert.Equal("1", model.Control);
+            Assert.Equal(1, model.ControlLength);
 
             Assert.True(modelState.IsValid);
             Assert.Collection(
                 modelState,
+                state => Assert.Equal(nameof(ValidateSomePropertiesSometimes.Control), state.Key),
                 state =>
                 {
-                    Assert.Equal(nameof(ValidatePropertiesSometimes.Length), state.Key);
+                    Assert.Equal(nameof(ValidateSomePropertiesSometimes.ControlLength), state.Key);
                     Assert.Equal(ModelValidationState.Valid, state.Value.ValidationState);
-                },
-                state => Assert.Equal(nameof(ValidatePropertiesSometimes.Control), state.Key),
-                state => Assert.Equal(nameof(ValidatePropertiesSometimes.NeverNull), state.Key));
+                });
         }
 
         private class Order11

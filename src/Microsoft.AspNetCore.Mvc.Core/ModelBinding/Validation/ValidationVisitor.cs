@@ -239,14 +239,20 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding.Validation
         {
             var isValid = true;
             var enumerator = strategy.GetChildren(_metadata, _key, _model);
+            var parentEntry = new ValidationEntry(_metadata, _key, _model);
 
             while (enumerator.MoveNext())
             {
-                var metadata = enumerator.Current.Metadata;
-                var model = enumerator.Current.Model;
-                var key = enumerator.Current.Key;
+                var entry = enumerator.Current;
+                var metadata = entry.Metadata;
+                var key = entry.Key;
+                if (metadata.ShouldValidate?.ShouldValidateEntry(entry, parentEntry) == false)
+                {
+                    SuppressValidation(key);
+                    continue;
+                }
 
-                isValid &= Visit(metadata, key, model);
+                isValid &= Visit(metadata, key, entry.Model);
             }
 
             return isValid;
