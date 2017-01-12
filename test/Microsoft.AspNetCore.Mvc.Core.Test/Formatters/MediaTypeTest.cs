@@ -67,11 +67,13 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
             Assert.Throws<ArgumentNullException>("mediaType", () => new MediaType(null, 0, 2));
         }
 
-        [Fact]
-        public void Constructor_NegativeOffset_Throws()
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(7)]
+        public void Constructor_NegativeOffset_Throws(int offset)
         {
             // Arrange, Act and Assert
-            Assert.Throws<ArgumentOutOfRangeException>("offset", () => new MediaType("media", -1, 5));
+            Assert.Throws<ArgumentOutOfRangeException>("offset", () => new MediaType("media", offset, 5));
         }
 
         [Fact]
@@ -81,15 +83,11 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
             Assert.Throws<ArgumentOutOfRangeException>("length", () => new MediaType("media", 0, -1));
         }
 
-        [Theory]
-        [InlineData(0, 10)]
-        [InlineData(10, 0)]
-        [InlineData(5, 5)]
-        [InlineData(int.MaxValue, int.MaxValue)]
-        public void Constructor_OffsetOrLengthOutOfBounds_Throws(int offset, int length)
+        [Fact]
+        public void Constructor_OffsetOrLengthOutOfBounds_Throws()
         {
             // Arrange, Act and Assert
-            Assert.Throws<ArgumentOutOfRangeException>(() => new MediaType("lengthof9", offset, length));
+            Assert.Throws<ArgumentException>(() => new MediaType("lengthof9", 5, 5));
         }
 
         [Theory]

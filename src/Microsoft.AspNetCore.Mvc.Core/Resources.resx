@@ -387,4 +387,7 @@
     <value>Unable to create an instance of type '{0}'. The type specified in {1} must not be abstract and must have a parameterless constructor.</value>
     <comment>0 is the type to configure. 1 is the name of the parameter, configurationType.</comment>
   </data>
+  <data name="Argument_InvalidOffsetLength" xml:space="preserve">
+    <value>Offset and length are out of bounds for the string or length is greater than the number of characters from index to the end of the string.</value>
+  </data>
 </root>

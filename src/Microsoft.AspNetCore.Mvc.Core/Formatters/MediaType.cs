@@ -4,6 +4,7 @@
 using System;
 using System.Globalization;
 using System.Text;
+using Microsoft.AspNetCore.Mvc.Core;
 using Microsoft.AspNetCore.Mvc.Formatters.Internal;
 using Microsoft.Extensions.Primitives;
 
@@ -61,9 +62,7 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
 
             if (offset > mediaType.Length - length)
             {
-                // TODO: This isn't necessarily length's fault but changing this to an ArgumentException with the
-                // appropriate message would be a breaking change.
-                throw new ArgumentOutOfRangeException(nameof(length));
+                throw new ArgumentException(Resources.Argument_InvalidOffsetLength);
             }
 
             _parameterParser = default(MediaTypeParameterParser);
